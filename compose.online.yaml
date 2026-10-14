@@ -1,0 +1,47 @@
+name: ucall-transformation
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ucall_transformation
+      POSTGRES_USER: ucall_transformation
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Credenciais geradas pelo instalar.sh}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ucall_transformation -d ucall_transformation"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [database]
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ucall-transformation
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Database__Provider: PostgreSQL
+      Database__Initialize: "true"
+      ConnectionStrings__Database: "Host=postgres;Port=5432;Database=ucall_transformation;Username=ucall_transformation;Password=${POSTGRES_PASSWORD}"
+      Storage__Root: /app/data
+      Bootstrap__Token: ${BOOTSTRAP_TOKEN:?Token gerado pelo instalar.sh}
+      App__PublicUrl: ""
+    volumes:
+      - app_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [database, web]
+networks:
+  database:
+    internal: true
+  web:
+volumes:
+  postgres_data:
+  app_data:
