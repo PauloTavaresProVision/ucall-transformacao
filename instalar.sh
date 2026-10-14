@@ -37,7 +37,7 @@ while read -r name image; do
         case "$network" in ""|bridge|host|none) continue;; esac
         attached=$(docker inspect --format '{{range $name, $value := .NetworkSettings.Networks}}{{$name}}{{println}}{{end}}' ucall-transformation)
         if ! grep -Fxq "$network" <<< "$attached"; then
-          docker network connect "$network" ucall-transformation || printf '%s\n' "Não foi possível ligar à rede $network. Usa o IP do servidor e porta 8088 no Nginx."
+          docker network connect "$network" ucall-transformation || printf '%s\n' "Não foi possível ligar à rede $network. Usa o IP do servidor e porta 7766 no Nginx."
         fi
       done < <(docker inspect --format '{{range $name, $value := .NetworkSettings.Networks}}{{$name}}{{println}}{{end}}' "$name")
     ;;
@@ -47,14 +47,14 @@ done < <(docker ps --format '{{.Names}} {{.Image}}')
 if command -v curl >/dev/null; then
   ready=false
   for attempt in {1..30}; do
-    if curl -fsS http://127.0.0.1:8088/api/health >/dev/null; then ready=true; break; fi
+    if curl -fsS http://127.0.0.1:7766/api/health >/dev/null; then ready=true; break; fi
     sleep 2
   done
   [[ "$ready" == true ]] || fail "A aplicação ainda não respondeu. Consulta: docker logs --tail 80 ucall-transformation"
 fi
 printf '%s\n' "Instalação concluída." \
   "Nginx Proxy Manager: HTTP / ucall-transformation / porta 8080." \
-  "Alternativa: HTTP / IP do servidor / porta 8088." \
+  "Alternativa: HTTP / IP do servidor / porta 7766." \
   "Activa HTTPS no Nginx para o login em produção." \
   "Código da primeira conta: consulta BOOTSTRAP_TOKEN em .env.online." \
   "Actualizações: git pull --ff-only && bash instalar.sh" \
