@@ -1,0 +1,24 @@
+services:
+  transformation:
+    build: .
+    image: ucall-transformation:0.3.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${APP_ENVIRONMENT:-Production}
+      ConnectionStrings__Database: "Host=${PG_HOST};Port=${PG_PORT:-5432};Database=${PG_DATABASE:-ucall_transformation};Username=${PG_USER};Password=${PG_PASSWORD}"
+      Database__Provider: PostgreSQL
+      Database__Initialize: ${DB_INITIALIZE:-false}
+      Bootstrap__Token: ${BOOTSTRAP_TOKEN}
+      App__PublicUrl: ${PUBLIC_URL:-https://transformacao.ucall.co.ao}
+    volumes:
+      - transformation_data:/app/data
+    networks:
+      - postgres_existing
+networks:
+  postgres_existing:
+    external: true
+    name: ${PG_DOCKER_NETWORK}
+volumes:
+  transformation_data:

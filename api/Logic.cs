@@ -1,0 +1,19 @@
+using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
+namespace Ucall;
+public static class Logic {
+ public static readonly string[] Statuses=["Por iniciar","Em curso","Em risco","Concluída"];
+ public static DateTimeOffset Now=>DateTimeOffset.UtcNow;
+ public static DateTimeOffset Luanda(DateTimeOffset dt)=>dt.ToOffset(TimeSpan.FromHours(1));
+ public static DateOnly Today=>DateOnly.FromDateTime(Luanda(Now).DateTime);
+ public static string Person(ClaimsPrincipal u)=>u.FindFirstValue("person_id")??"";
+ public static bool Leader(ClaimsPrincipal u)=>u.IsInRole("leader")&&Person(u)=="paulo";
+ public static bool Edit(ClaimsPrincipal u,WorkAction a)=>Leader(u)||(!u.IsInRole("ce")&&(a.OwnerId==Person(u)||a.Participants.Split(',').Contains(Person(u))));
+ public static bool EditOwner(ClaimsPrincipal u,string owner)=>Leader(u)||(!u.IsInRole("ce")&&owner==Person(u));
+ public static string State(WorkAction a)=>a.Status!="Concluída"&&a.DueDate<Today?"Atrasada":a.Status;
+ public static decimal? OnTime(List<WorkAction> actions){var scope=actions.Where(x=>x.MandateNumber!=null&&(x.OriginalDueDate<Today||x.CompletedAt!=null)).ToList();return scope.Count==0?null:Math.Round(scope.Count(x=>x.CompletedAt!=null&&DateOnly.FromDateTime(Luanda(x.CompletedAt.Value).DateTime)<=x.OriginalDueDate)*100m/scope.Count,1);}
+ public static async Task<object> Dashboard(AppDb db){var actions=await db.Actions.AsNoTracking().ToListAsync();var mandate=actions.Where(x=>x.MandateNumber!=null).ToList();var gate=await db.Gate.AsNoTracking().ToListAsync();var decisions=await db.Decisions.AsNoTracking().ToListAsync();return new {today=Today,gateDate=new DateOnly(2027,9,30),daysToGate=new DateOnly(2027,9,30).DayNumber-Today.DayNumber,phase=Today<new DateOnly(2026,11,1)?"Arranque":Today<new DateOnly(2027,1,1)?"Diagnóstico":Today<new DateOnly(2027,5,1)?"Desenhar a oferta":Today<new DateOnly(2027,10,1)?"Pilotar":"Lançar",counts=mandate.GroupBy(State).ToDictionary(x=>x.Key,x=>x.Count()),additionalActions=actions.Count-mandate.Count,onTime=OnTime(mandate),gateConfirmed=gate.Count(x=>x.Confirmed),upcoming=actions.Where(x=>x.Status!="Concluída"&&x.DueDate>=Today&&x.DueDate<=Today.AddDays(14)).OrderBy(x=>x.DueDate),overdue=actions.Where(x=>State(x)=="Atrasada"),decisionsOver3=decisions.Count(x=>x.DecidedAt==null&&Now-x.RequestedAt>TimeSpan.FromDays(3)),priorities=Enumerable.Range(1,6).Select(p=>new{number=p,total=actions.Count(x=>x.Priority==p),completed=actions.Count(x=>x.Priority==p&&x.Status=="Concluída"),active=actions.Count(x=>x.Priority==p&&x.Status=="Em curso"),risk=actions.Count(x=>x.Priority==p&&(State(x)=="Atrasada"||x.Status=="Em risco"))})};}
+ public static async Task<decimal?> KpiValue(AppDb db,Kpi k){if(k.Code=="ontime")return OnTime(await db.Actions.Where(x=>x.MandateNumber!=null).ToListAsync());if(k.Code is "automated" or "optimized"){var p=await db.Processes.Where(x=>x.VerifiedOn!=null).ToListAsync();var scope=p.Where(x=>k.Code=="automated"?x.Internal:x.Mapped).ToList();return scope.Count==0?null:Math.Round(scope.Count(x=>k.Code=="automated"?x.Automated:x.Optimized)*100m/scope.Count,1);}return k.Measurements.OrderByDescending(x=>x.MeasuredOn).ThenByDescending(x=>x.Id).Select(x=>(decimal?)x.Value).FirstOrDefault();}
+ public static decimal? Expected(Kpi k){if(k.InterimDate!=null&&Today<=k.InterimDate)return k.InterimTarget;return k.Target;}
+ public static async Task<object> Snapshot(AppDb db){var kpis=await db.Kpis.Include(x=>x.Measurements).ToListAsync();var values=new List<object>();foreach(var k in kpis)values.Add(new{k.Code,k.Name,value=await KpiValue(db,k),k.Target,k.Unit,k.TargetDate});return new {dashboard=await Dashboard(db),kpis=values,gate=await db.Gate.AsNoTracking().ToListAsync(),decisions=await db.Decisions.AsNoTracking().ToListAsync(),risks=new[]{"Tempo protegido absorvido pelo dia-a-dia","Atraso no recrutamento dos seniores","Oferta desenhada longe dos clientes"}};}
+}

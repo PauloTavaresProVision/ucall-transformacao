@@ -5,6 +5,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 command -v docker >/dev/null || fail "Docker não está instalado."
+command -v curl >/dev/null || fail "Falta curl. Instala curl no servidor antes de continuar."
 docker info >/dev/null 2>&1 || fail "O Docker não está a funcionar ou falta permissão."
 docker compose version >/dev/null 2>&1 || fail "Falta Docker Compose v2."
 test -f Dockerfile && test -f api/Ucall.Api.csproj && test -f frontend/package.json ||
@@ -18,7 +19,7 @@ if [[ ! -f .env.contabo ]]; then
   [[ "$pg_container" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || fail "Nome de contentor inválido."
   read -rp "Utilizador administrador desse PostgreSQL: " pg_admin
   [[ "$pg_admin" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || fail "Utilizador inválido."
-  pg_network=$(docker inspect --format '{{range $name, $value := .NetworkSettings.Networks}}{{$name}}{{println}}{{end}}' "$pg_container" | head -n 1)
+  pg_network=$(docker inspect --format '{{range $name, $value := .NetworkSettings.Networks}}{{$name}}{{println}}{{end}}' "$pg_container" | sed -n '1p')
   [[ -n "$pg_network" && "$pg_network" != bridge && "$pg_network" != host && "$pg_network" != none ]] ||
     fail "O PostgreSQL precisa de uma rede Docker com nome e resolução de nomes."
   read -rp "Rede Docker do Nginx (Enter se Nginx corre no próprio servidor): " proxy_network
@@ -33,10 +34,6 @@ if [[ ! -f .env.contabo ]]; then
   password=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
   token=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
   [[ ${#password} == 64 && ${#token} == 64 ]] || fail "Não foi possível gerar as credenciais."
-  {
-    printf "CREATE ROLE ucall_transformation LOGIN PASSWORD '%s';\n" "$password"
-    printf "CREATE DATABASE ucall_transformation OWNER ucall_transformation;\n"
-  } | docker exec -i "$pg_container" psql -v ON_ERROR_STOP=1 -U "$pg_admin" -d postgres >/dev/null
   cat > .env.contabo <<EOF
 PUBLIC_URL=https://$domain
 POSTGRES_NETWORK=$pg_network
@@ -46,6 +43,10 @@ BOOTSTRAP_TOKEN=$token
 EOF
   chmod 600 .env.contabo
 
+  {
+    printf "CREATE ROLE ucall_transformation LOGIN PASSWORD '%s';\n" "$password"
+    printf "CREATE DATABASE ucall_transformation OWNER ucall_transformation;\n"
+  } | docker exec -i "$pg_container" psql -v ON_ERROR_STOP=1 -U "$pg_admin" -d postgres >/dev/null
   cat > compose.contabo.yaml <<'YAML'
 name: ucall-transformation
 services:
@@ -112,3 +113,4 @@ if [[ "$ready" != true ]]; then
   exit 1
 fi
 printf '%s\n' "Aplicação disponível."   "Nginx no servidor: http://127.0.0.1:8088"   "Nginx em Docker na rede configurada: http://ucall-transformation:8080"   "Activa HTTPS no domínio escolhido."   "O token para criar a primeira conta está em .env.contabo (BOOTSTRAP_TOKEN)."   "Actualizações: git pull --ff-only && bash instalar.sh"   "Conserva .env.contabo e o volume app_data; contêm credenciais e chaves cifradas."
+

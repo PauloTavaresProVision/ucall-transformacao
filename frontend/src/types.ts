@@ -1,0 +1,14 @@
+export type Person={id:string;name:string;area:string};
+export type User={id:string;email:string;displayName:string;personId:string;roles:string[]};
+export type Evidence={id:string;name:string;uploadedAt:string};
+export type WorkAction={id:string;mandateNumber:number|null;title:string;description:string;phase:string;priority:number;ownerId:string;participants:string;dueDate:string;originalDueDate:string;deadlineLabel:string;deliverable:string;status:string;progress:number;version:number;updatedAt:string;completedAt:string|null;meetingId:string|null;dependsOnId:string|null;kpiId:string|null;evidence:Evidence[];history:{id:string;description:string;actor:string;at:string}[];subtasks:{id:string;title:string;done:boolean}[]};
+export type Meeting={id:string;title:string;scheduledAt:string;participants:string;agenda:string;minutes:string;mandateAccepted:boolean};
+export type Decision={id:string;request:string;toPersonId:string;requestedAt:string;decidedAt:string|null;outcome:string;meetingId:string|null};
+export type Measurement={id:string;value:number;measuredOn:string;source:string;comment:string;evidence:Evidence[]};
+export type Kpi={id:string;code:string;name:string;unit:string;target:number|null;targetDate:string;interimTarget:number|null;interimDate:string|null;ownerId:string;calculated:boolean;value:number|null;measurements:Measurement[]};
+export type Gate={id:string;number:number;title:string;ownerId:string;dueDate:string;confirmed:boolean;evidence:Evidence[]};
+export type AlertRule={id:string;kind:string;label:string;enabled:boolean;email:boolean;daysBefore:string;repeatEveryDays:number;escalateAfterDays:number;recipients:string;sendHour:number};
+export type Notification={id:string;title:string;link:string;read:boolean;createdAt:string;emailStatus:string};
+export type Dashboard={today:string;gateDate:string;daysToGate:number;phase:string;counts:Record<string,number>;additionalActions:number;onTime:number|null;gateConfirmed:number;upcoming:WorkAction[];overdue:WorkAction[];decisionsOver3:number;priorities:{number:number;total:number;completed:number;active:number;risk:number}[]};
+export type Snapshot={dashboard:Dashboard;kpis:{code:string;name:string;value:number|null;target:number|null;unit:string;targetDate:string}[];gate:Gate[];decisions:Decision[];risks:string[]};
+export type Report={id:string;month:string;snapshot:string;executiveSummary:string;createdAt:string};

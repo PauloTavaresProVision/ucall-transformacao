@@ -1,0 +1,16 @@
+**/node_modules
+**/bin
+**/obj
+**/dist
+**/data
+**/*.db*
+**/.env*
+.dotnet-home
+.appdata
+.packages
+.local-feed
+.npm-cache
+artifacts
+tools
+tests
+.git
