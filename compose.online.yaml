@@ -22,7 +22,7 @@ services:
     container_name: ucall-transformation
     restart: unless-stopped
     ports:
-      - "8088:8080"
+      - "7766:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
