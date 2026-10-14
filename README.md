@@ -30,7 +30,7 @@ No Nginx Proxy Manager:
 - Forward Port: 8080
 - Activar SSL/HTTPS no domínio escolhido.
 
-Se o proxy não partilhar uma rede Docker, usar o IP do servidor com porta 8088. O domínio é configurado apenas no Nginx; não é necessário durante a instalação. O login de produção exige HTTPS.
+Se o proxy não partilhar uma rede Docker, usar o IP do servidor com porta 7766. O domínio é configurado apenas no Nginx; não é necessário durante a instalação. O login de produção exige HTTPS.
 
 ## Primeira conta
 
