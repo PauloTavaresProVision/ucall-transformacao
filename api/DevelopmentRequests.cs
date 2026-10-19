@@ -13,10 +13,21 @@ public class DevelopmentRequest {
  public string Status { get; set; } = "Submetido";
  public string Payload { get; set; } = "";
 }
+public class RequestAssessment {
+ public string RequestId { get; set; }="";
+ public string Payload { get; set; }="";
+ public string Version { get; set; }=Guid.NewGuid().ToString("N");
+ public string UpdatedAt { get; set; }="";
+ public string UpdatedBy { get; set; }="";
+}
+public record RequestAssessmentInput(bool? BilledOperation,bool? UsesAi,bool? PersonalData,string? Version);
 public class RequestsDb(DbContextOptions<RequestsDb> options) : DbContext(options) {
  public DbSet<DevelopmentRequest> Requests => Set<DevelopmentRequest>();
+ public DbSet<RequestAssessment> Assessments => Set<RequestAssessment>();
  protected override void OnModelCreating(ModelBuilder b) {
   var e=b.Entity<DevelopmentRequest>();e.ToTable("DevelopmentRequests");e.HasKey(x=>x.Id);
+  var a=b.Entity<RequestAssessment>();a.ToTable("DevelopmentRequestAssessments");a.HasKey(x=>x.RequestId);a.Property(x=>x.Version).IsConcurrencyToken();
+  a.HasOne<DevelopmentRequest>().WithOne().HasForeignKey<RequestAssessment>(x=>x.RequestId).OnDelete(DeleteBehavior.Cascade);
   e.HasIndex(x=>x.SubmissionKey).IsUnique();e.HasIndex(x=>x.Reference).IsUnique();
  }
  public Task Upgrade(CancellationToken ct=default) => Database.ExecuteSqlRawAsync("""
@@ -24,6 +35,10 @@ public class RequestsDb(DbContextOptions<RequestsDb> options) : DbContext(option
    "Id" TEXT NOT NULL PRIMARY KEY, "SubmissionKey" TEXT NOT NULL,
    "Reference" TEXT NOT NULL, "SubmittedAt" TEXT NOT NULL,
    "Status" TEXT NOT NULL, "Payload" TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS "DevelopmentRequestAssessments" (
+   "RequestId" TEXT NOT NULL PRIMARY KEY REFERENCES "DevelopmentRequests" ("Id") ON DELETE CASCADE,
+   "Payload" TEXT NOT NULL, "Version" TEXT NOT NULL, "UpdatedAt" TEXT NOT NULL, "UpdatedBy" TEXT NOT NULL
   );
   CREATE UNIQUE INDEX IF NOT EXISTS "IX_DevelopmentRequests_SubmissionKey" ON "DevelopmentRequests" ("SubmissionKey");
   CREATE UNIQUE INDEX IF NOT EXISTS "IX_DevelopmentRequests_Reference" ON "DevelopmentRequests" ("Reference");
@@ -45,8 +60,7 @@ public class DevelopmentRequestInput {
  public List<RequestCost> Costs { get; set; }=[];
  public string Proposal { get; set; }=""; public string ExpectedBenefit { get; set; }="";
  public decimal? SavedHoursPerMonth { get; set; } public decimal? FinancialBenefitPerMonth { get; set; }
- public string Purpose { get; set; }="internal"; public bool BilledOperation { get; set; }
- public bool UsesAi { get; set; } public bool PersonalData { get; set; }
+ public string Purpose { get; set; }="internal";
 }
 public static class DevelopmentRequests {
  public static readonly string[] Areas=["DP","DMKT","DMC","GGP","GCGR","DLP","DSI","DFC","GDN","Academia","DC","GIC"];
@@ -76,9 +90,28 @@ public static class DevelopmentRequests {
  static object Receipt(DevelopmentRequest r)=>new{r.Reference,r.SubmittedAt,r.Status};
  static object Summary(DevelopmentRequest r) {
   var p=JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!;
-  return new{r.Id,r.Reference,r.SubmittedAt,r.Status,p.Title,p.Area,p.OwnerName,p.Purpose,p.BilledOperation,p.SavedHoursPerMonth,p.FinancialBenefitPerMonth};
+  return new{r.Id,r.Reference,r.SubmittedAt,r.Status,p.Title,p.Area,p.OwnerName,p.Purpose,p.SavedHoursPerMonth,p.FinancialBenefitPerMonth};
+ }
+ public static bool CanAssess(ClaimsPrincipal u)=>u.IsInRole("leader")||u.IsInRole("officer");
+ static object? AssessmentView(RequestAssessment? a) {
+  if(a==null)return null;
+  var p=JsonSerializer.Deserialize<RequestAssessmentInput>(a.Payload,Json)!;
+  return new{p.BilledOperation,p.UsesAi,p.PersonalData,a.Version,a.UpdatedAt,a.UpdatedBy};
+ }
+ public static async Task<IResult> SaveAssessment(string id,RequestAssessmentInput input,ClaimsPrincipal u,RequestsDb db,CancellationToken ct) {
+  if(!CanAssess(u))return Results.Forbid();
+  if(!await db.Requests.AnyAsync(x=>x.Id==id,ct))return Results.NotFound();
+  var current=await db.Assessments.SingleOrDefaultAsync(x=>x.RequestId==id,ct);
+  if(current?.Version!=input.Version)return Results.Conflict(new{error="O enquadramento foi alterado por outra pessoa. Feche e volte a abrir o pedido antes de guardar."});
+  var a=current??new RequestAssessment{RequestId=id};
+  a.Payload=JsonSerializer.Serialize(input with{Version=null},Json);
+  a.UpdatedAt=DateTimeOffset.UtcNow.ToString("O");a.UpdatedBy=u.FindFirstValue(ClaimTypes.NameIdentifier)??u.Identity?.Name??"equipa";a.Version=Guid.NewGuid().ToString("N");
+  if(current==null)db.Assessments.Add(a);
+  try{await db.SaveChangesAsync(ct);}catch(DbUpdateException){return Results.Conflict(new{error="O enquadramento foi alterado por outra pessoa. Feche e volte a abrir o pedido antes de guardar."});}
+  return Results.Ok(AssessmentView(a));
  }
  public static void Map(WebApplication app) {
+  app.MapPut("/api/development-requests/{id}/assessment",SaveAssessment).RequireAuthorization();
   app.MapGet("/api/public/development-requests/areas",()=>Results.Ok(Areas));
   app.MapPost("/api/public/development-requests",async(DevelopmentRequestInput input,RequestsDb db,HttpRequest http,CancellationToken ct)=>{
    if(http.ContentLength>131072)return Results.BadRequest(new{error="O pedido excede o tamanho permitido."});
@@ -100,7 +133,8 @@ public static class DevelopmentRequests {
   }).RequireAuthorization();
   app.MapGet("/api/development-requests/{id}",async(string id,ClaimsPrincipal u,RequestsDb db)=>{
    if(!Team(u))return Results.Forbid();var r=await db.Requests.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id);
-   return r==null?Results.NotFound():Results.Ok(new{r.Id,r.Reference,r.SubmittedAt,r.Status,data=JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json),effortHoursPerMonth=Effort(JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!),directCostPerMonth=Cost(JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!)});
+   var assessment=r==null?null:await db.Assessments.AsNoTracking().SingleOrDefaultAsync(x=>x.RequestId==id);
+   return r==null?Results.NotFound():Results.Ok(new{r.Id,r.Reference,r.SubmittedAt,r.Status,assessment=AssessmentView(assessment),canEditAssessment=CanAssess(u),data=JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json),effortHoursPerMonth=Effort(JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!),directCostPerMonth=Cost(JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!)});
   }).RequireAuthorization();
  }
 }

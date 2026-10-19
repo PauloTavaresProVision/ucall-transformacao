@@ -80,3 +80,11 @@ dotnet run --project tests/Requests.Checks/Requests.Checks.csproj
 ```
 
 O teste `tests/requests-ui.cjs` usa Playwright (`UCALL_PLAYWRIGHT_MODULE` permite indicar o módulo). `tests/requests.cjs` é exclusivamente para uma instalação de teste nova, com `TEST_URL` e token inicial `requests-test-only-2026`; nunca executar na instalação real.
+
+### Enquadramento interno
+
+Operação facturada, utilização de IA e tratamento de dados pessoais são avaliados pela Equipa de Transformação na ficha interna do pedido. Estes campos não são pedidos ao solicitante nem aceites no modelo público de submissão. Rascunhos antigos descartam estes três campos ao serem recuperados.
+
+Cada ponto começa como **Por avaliar**, em vez de assumir Não. Líder e officers podem guardar o enquadramento; a CE pode consultar. São registados o autor e a data da última alteração. A versão impede sobrepor alterações concorrentes. Os valores anteriormente assinalados pelos solicitantes não são tratados como avaliação da equipa; os pedidos existentes ficam por avaliar até à análise interna.
+
+A tabela de enquadramento é criada automaticamente no arranque, preservando os pedidos. A avaliação não altera o estado do pedido nem autoriza a implementação. Validação de papéis, gravação, valores pendentes e conflito de versão cobertos nos testes de servidor; formulário público e edição/consulta interna verificados no browser com API simulada.
