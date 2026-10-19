@@ -53,6 +53,30 @@ docker compose --env-file .env.online -f compose.online.yaml ps
 
 ## Estado da aplicação
 
-Acções, processos, KPIs, reuniões, decisões, Gate, reporte, utilizadores, alertas e configuração SMTP/OpenAI estão incluídos. Áudio de reuniões e pipeline de iniciativas ainda não estão implementados.
+Acções, processos, KPIs, reuniões, decisões, Gate, reporte, utilizadores, alertas e configuração SMTP/OpenAI estão incluídos. A submissão de pedidos de desenvolvimento está incluída. O custeio e as fases seguintes do pipeline, bem como o áudio de reuniões, ainda estão por implementar.
 
 Frontend compilado. A instalação real na Contabo ainda tem de ser executada; não existe acesso remoto ao servidor nesta sessão.
+
+## Pedidos de desenvolvimento
+
+Depois de actualizar, abrir **Pedidos de desenvolvimento** no painel e seleccionar **Copiar link para as áreas**. O formulário fica em `/pedidos/novo`, no mesmo domínio HTTPS, e não exige sessão no painel.
+
+O formulário inclui identificação, processo/actividades, esforço/custos actuais e melhoria esperada; permite guardar um rascunho neste dispositivo e rever antes de enviar. As áreas são DP, DMKT, DMC, GGP, GCGR, DLP, DSI, DFC, GDN, Academia, DC e GIC.
+
+As horas mensais resultam de pessoas × horas por execução × execuções mensais. Custos anuais e trimestrais são convertidos para mês; custos pontuais ficam separados. O benefício esperado é uma estimativa, sem conversão automática de horas em dinheiro.
+
+Os pedidos entram como **Submetido**, com referência e data automáticas. A equipa autenticada (líder, officers e CE) pode pesquisar e consultar os pedidos; quem abre o link não pode consultar os pedidos existentes. A API valida os dados, protege a submissão com CSRF e limita pedidos repetidos. A tabela é criada automaticamente ao arrancar, preservando os restantes dados e volumes.
+
+Esta entrega não inclui o custeio, aprovação, implementação ou verificação pela equipa. A submissão não autoriza uma iniciativa nem altera o Gate.
+
+### Verificação
+
+Compilação do frontend e da API concluídas. Testes de validação, cálculos, persistência e unicidade passaram, assim como o percurso dos quatro passos no browser com API simulada e adaptação a desktop/tablet/telemóvel. O teste HTTP completo ficou bloqueado pelas permissões de ligação local desta sessão.
+
+```bash
+npm run build --prefix frontend
+dotnet build api/Ucall.Api.csproj
+dotnet run --project tests/Requests.Checks/Requests.Checks.csproj
+```
+
+O teste `tests/requests-ui.cjs` usa Playwright (`UCALL_PLAYWRIGHT_MODULE` permite indicar o módulo). `tests/requests.cjs` é exclusivamente para uma instalação de teste nova, com `TEST_URL` e token inicial `requests-test-only-2026`; nunca executar na instalação real.
