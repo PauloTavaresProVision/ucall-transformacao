@@ -76,8 +76,8 @@ public static class DevelopmentRequests {
   if(i.Activities==null||i.Activities.Count is <1 or >40||i.Activities.Any(a=>a==null||!Text(a.Name,2,500)||!Areas.Contains(a.Area)||a.Sla==null||a.Sla.Length>200))return "Indica pelo menos uma actividade com a respectiva área responsável.";
   if(i.InvolvedAreas==null||i.InvolvedAreas.Count is <1 or >12||i.InvolvedAreas.Any(a=>!Areas.Contains(a)))return "Selecciona as áreas intervenientes.";
   var missingArea=i.InvolvedAreas.FirstOrDefault(area=>!i.Activities.Any(a=>a.Area==area));
-  if(missingArea!=null)return $"Qual é a intervenção da {missingArea} neste processo? Acrescente uma actividade e seleccione {missingArea} como área responsável.";
-  if(i.Activities.Any(a=>!i.InvolvedAreas.Contains(a.Area)))return "Seleccione todas as áreas responsáveis pelas actividades nas áreas intervenientes.";
+  if(missingArea!=null)return $"Qual é a intervenção da {missingArea} neste processo? Acrescenta uma actividade e selecciona {missingArea} como área responsável.";
+  if(i.Activities.Any(a=>!i.InvolvedAreas.Contains(a.Area)))return "Selecciona todas as áreas responsáveis pelas actividades nas áreas intervenientes.";
   if(i.Tools==null||i.Tools.Count is <1 or >30||i.Tools.Any(t=>!Text(t,1,100)))return "Indica as ferramentas de suporte, ou escreve Sem ferramenta.";
   if(i.People is <1 or >10000||i.HoursPerPerson<=0||i.HoursPerPerson>744||i.ExecutionsPerMonth<=0||i.ExecutionsPerMonth>10000||!new[]{"daily","weekly","monthly","quarterly","annual","custom"}.Contains(i.Frequency))return "Revê pessoas, horas por execução e frequência mensal.";
   if(Effort(i)>744m*i.People)return "O esforço mensal ultrapassa as horas disponíveis por pessoa. Revê a duração e a frequência.";
@@ -102,12 +102,12 @@ public static class DevelopmentRequests {
   if(!CanAssess(u))return Results.Forbid();
   if(!await db.Requests.AnyAsync(x=>x.Id==id,ct))return Results.NotFound();
   var current=await db.Assessments.SingleOrDefaultAsync(x=>x.RequestId==id,ct);
-  if(current?.Version!=input.Version)return Results.Conflict(new{error="O enquadramento foi alterado por outra pessoa. Feche e volte a abrir o pedido antes de guardar."});
+  if(current?.Version!=input.Version)return Results.Conflict(new{error="O enquadramento foi alterado por outra pessoa. Fecha e volta a abrir o pedido antes de guardar."});
   var a=current??new RequestAssessment{RequestId=id};
   a.Payload=JsonSerializer.Serialize(input with{Version=null},Json);
   a.UpdatedAt=DateTimeOffset.UtcNow.ToString("O");a.UpdatedBy=u.FindFirstValue(ClaimTypes.NameIdentifier)??u.Identity?.Name??"equipa";a.Version=Guid.NewGuid().ToString("N");
   if(current==null)db.Assessments.Add(a);
-  try{await db.SaveChangesAsync(ct);}catch(DbUpdateException){return Results.Conflict(new{error="O enquadramento foi alterado por outra pessoa. Feche e volte a abrir o pedido antes de guardar."});}
+  try{await db.SaveChangesAsync(ct);}catch(DbUpdateException){return Results.Conflict(new{error="O enquadramento foi alterado por outra pessoa. Fecha e volta a abrir o pedido antes de guardar."});}
   return Results.Ok(AssessmentView(a));
  }
  public static void Map(WebApplication app) {
