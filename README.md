@@ -1,5 +1,7 @@
 # UCALL Transformação
 
+Para abrir a revisão de horas aos responsáveis e direcções, consulta o [guia de acessos, triagem e arranque](docs/revisao-de-horas.md). O endereço para as áreas é `/pedidos/meus`.
+
 ## Colocar a aplicação no servidor
 
 A instalação cria automaticamente aplicação, PostgreSQL, base de dados, credenciais e volumes. Não pede domínio, rede ou dados de PostgreSQL. Requer Docker e Docker Compose v2 já instalados.

@@ -33,7 +33,8 @@ public class AlertEngine(AppDb db,ConfigurationStore config,UserManagerAdapter u
 public class UserManagerAdapter(AppDb db){public Task<User?> ByPerson(string id)=>db.Users.FirstOrDefaultAsync(x=>x.PersonId==id);}
 public class AlertWorker(IServiceScopeFactory scopeFactory,ILogger<AlertWorker> logger):BackgroundService {protected override async Task ExecuteAsync(CancellationToken stoppingToken){using var timer=new PeriodicTimer(TimeSpan.FromMinutes(5));do{try{using var scope=scopeFactory.CreateScope();await scope.ServiceProvider.GetRequiredService<AlertEngine>().Run(stoppingToken);}catch(OperationCanceledException)when(stoppingToken.IsCancellationRequested){break;}catch{logger.LogWarning("O processamento de alertas falhou; será repetido no próximo ciclo.");}}while(await timer.WaitForNextTickAsync(stoppingToken));}}
 
-public class SmtpMailer(ConfigurationStore config){
+public interface IReviewMail { Task Send(string recipient,string subject,string body,CancellationToken ct); }
+public class SmtpMailer(ConfigurationStore config):IReviewMail{
  public async Task Send(string recipient,string subject,string body,CancellationToken ct){
  var host=await config.Get("smtp.host");var from=await config.Get("smtp.from");
  if(string.IsNullOrWhiteSpace(host)||string.IsNullOrWhiteSpace(from))throw new InvalidOperationException("Preenche e guarda o servidor SMTP e o remetente antes de testar.");

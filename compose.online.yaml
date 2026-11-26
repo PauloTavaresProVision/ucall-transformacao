@@ -31,7 +31,7 @@ services:
       ConnectionStrings__Database: "Host=postgres;Port=5432;Database=ucall_transformation;Username=ucall_transformation;Password=${POSTGRES_PASSWORD}"
       Storage__Root: /app/data
       Bootstrap__Token: ${BOOTSTRAP_TOKEN:?Token gerado pelo instalar.sh}
-      App__PublicUrl: ""
+      App__PublicUrl: ${UCALL_PUBLIC_URL:-}
     volumes:
       - app_data:/app/data
     depends_on:
