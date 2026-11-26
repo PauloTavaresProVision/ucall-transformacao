@@ -14,13 +14,15 @@ cd ucall-transformacao
 bash instalar.sh
 ```
 
-Se a pasta já existe:
+Se a pasta já existe, actualizar com backup automático da base e do volume app_data (guardado em `backups/`):
 
 ```bash
 cd ucall-transformacao
 git pull --ff-only
-bash instalar.sh
+bash actualizar.sh
 ```
+
+Opções: `--url https://dominio` define o URL público usado nos emails; `--limpar` aplica `sql/002-review-cleanup.sql` depois do backup.
 
 ## Nginx
 
