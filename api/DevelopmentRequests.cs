@@ -21,10 +21,11 @@ public class RequestAssessment {
  public string UpdatedBy { get; set; }="";
 }
 public record RequestAssessmentInput(bool? BilledOperation,bool? UsesAi,bool? PersonalData,string? Version);
-public class RequestsDb(DbContextOptions<RequestsDb> options) : DbContext(options) {
+public partial class RequestsDb(DbContextOptions<RequestsDb> options) : DbContext(options) {
  public DbSet<DevelopmentRequest> Requests => Set<DevelopmentRequest>();
  public DbSet<RequestAssessment> Assessments => Set<RequestAssessment>();
  protected override void OnModelCreating(ModelBuilder b) {
+  ReviewModel(b);
   var e=b.Entity<DevelopmentRequest>();e.ToTable("DevelopmentRequests");e.HasKey(x=>x.Id);
   var a=b.Entity<RequestAssessment>();a.ToTable("DevelopmentRequestAssessments");a.HasKey(x=>x.RequestId);a.Property(x=>x.Version).IsConcurrencyToken();
   a.HasOne<DevelopmentRequest>().WithOne().HasForeignKey<RequestAssessment>(x=>x.RequestId).OnDelete(DeleteBehavior.Cascade);
@@ -128,13 +129,14 @@ public static class DevelopmentRequests {
   }).RequireRateLimiting("request-submit");
   app.MapGet("/api/development-requests",async(ClaimsPrincipal u,RequestsDb db)=>{
    if(!Team(u))return Results.Forbid();
-   var rows=await db.Requests.AsNoTracking().OrderByDescending(x=>x.SubmittedAt).Take(200).ToListAsync();
-   return Results.Ok(new{total=await db.Requests.CountAsync(),items=rows.Select(Summary)});
+   var eligible=db.Requests.Where(r=>r.Reference!=ReviewCatalogue.Test&&r.Reference!=ReviewCatalogue.Duplicate);
+   var rows=await eligible.AsNoTracking().OrderByDescending(x=>x.SubmittedAt).Take(200).ToListAsync();
+   return Results.Ok(new{total=await eligible.CountAsync(),items=rows.Select(Summary)});
   }).RequireAuthorization();
   app.MapGet("/api/development-requests/{id}",async(string id,ClaimsPrincipal u,RequestsDb db)=>{
    if(!Team(u))return Results.Forbid();var r=await db.Requests.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id);
    var assessment=r==null?null:await db.Assessments.AsNoTracking().SingleOrDefaultAsync(x=>x.RequestId==id);
-   return r==null?Results.NotFound():Results.Ok(new{r.Id,r.Reference,r.SubmittedAt,r.Status,assessment=AssessmentView(assessment),canEditAssessment=CanAssess(u),data=JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json),effortHoursPerMonth=Effort(JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!),directCostPerMonth=Cost(JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!)});
+   return r==null||r.Reference==ReviewCatalogue.Test||r.Reference==ReviewCatalogue.Duplicate?Results.NotFound():Results.Ok(new{r.Id,r.Reference,r.SubmittedAt,r.Status,assessment=AssessmentView(assessment),canEditAssessment=CanAssess(u),data=JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json),effortHoursPerMonth=Effort(JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!),directCostPerMonth=Cost(JsonSerializer.Deserialize<DevelopmentRequestInput>(r.Payload,Json)!)});
   }).RequireAuthorization();
  }
 }
