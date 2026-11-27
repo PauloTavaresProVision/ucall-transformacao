@@ -29,11 +29,17 @@ public static partial class ReviewApi {
  }
  static CookieOptions Options(HttpContext c)=>new(){HttpOnly=true,Secure=!c.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment()||c.Request.IsHttps,SameSite=SameSiteMode.Strict,Path="/api/review",MaxAge=TimeSpan.FromHours(8)};
  public static bool Allowed(string? viewer,string? owner,IEnumerable<string> areas,string area)=>!string.IsNullOrEmpty(viewer)&&(viewer==owner||areas.Contains(area));
+ // The leader's assignment wins; otherwise the email written in the original submission.
+ static string? Owner(ReviewBinding? b,DevelopmentRequestInput p)=>b?.Contact??(Mail(Clean(p.OwnerEmail))?Clean(p.OwnerEmail):null);
+ static async Task<bool> Owns(RequestsDb db,string email,CancellationToken ct){
+  var bindings=await db.Bindings.AsNoTracking().ToDictionaryAsync(x=>x.RequestId,ct);
+  return (await db.Requests.AsNoTracking().ToListAsync(ct)).Where(Eligible).Any(r=>Owner(bindings.GetValueOrDefault(r.Id),Input(r))==email);
+ }
  static Task<List<string>> Areas(RequestsDb db,string mail)=>db.Delegates.Where(x=>x.Email==mail).Select(x=>x.Area).ToListAsync();
  static ReviewEvent Event(string id,string actor,string action,string data)=>new(){RequestId=id,Actor=actor,At=Stamp,Action=action,Data=data};
  static async Task<IResult> Issue(MailInput i,RequestsDb db,IDataProtectionProvider dp,IReviewMail smtp,ILoggerFactory logs,CancellationToken ct){
   var email=Clean(i.Email);var token=Guid.NewGuid().ToString("N");var ticket=dp.CreateProtector("UCALL.hours.challenge",email).ToTimeLimitedDataProtector();IResult Reply(string id)=>Results.Ok(new{challenge=ticket.Protect(id,TimeSpan.FromMinutes(10))});var generic=Reply(token);
-  if(!Mail(email)||!await db.Bindings.AnyAsync(x=>x.Contact==email,ct)&&!await db.Delegates.AnyAsync(x=>x.Email==email,ct))return generic;
+  if(!Mail(email)||!await db.Delegates.AnyAsync(x=>x.Email==email,ct)&&!await Owns(db,email,ct))return generic;
   var code=RandomNumberGenerator.GetInt32(1000000).ToString("D6");var secret=dp.CreateProtector("UCALL.hours.code",email,token).Protect(code);var now=Now;
   var changed=await db.Database.ExecuteSqlInterpolatedAsync($"""
    INSERT INTO "ReviewCodes" ("Email","Challenge","Secret","Issued","Attempts") VALUES ({email},{token},{secret},{now},0)
@@ -73,7 +79,7 @@ public static partial class ReviewApi {
   var bindings=await db.Bindings.AsNoTracking().ToDictionaryAsync(x=>x.RequestId);var areas=viewer==null?[]:await Areas(db,viewer);
   var reviews=await db.Reviews.AsNoTracking().ToDictionaryAsync(x=>x.RequestId);var rows=new List<ReviewRow>();
   foreach(var r in (await db.Requests.AsNoTracking().ToListAsync()).Where(Eligible)){
-   var p=Input(r);bindings.TryGetValue(r.Id,out var b);if(!team&&!Allowed(viewer,b?.Contact,areas,p.Area))continue;
+   var p=Input(r);bindings.TryGetValue(r.Id,out var b);if(!team&&!Allowed(viewer,Owner(b,p),areas,p.Area))continue;
    reviews.TryGetValue(r.Id,out var rev);var f=rev==null?null:Form(rev);bool final=rev?.State=="submitted"&&f!=null;
    rows.Add(new(r.Id,r.Reference,r.SubmittedAt,p.Title,p.Area,p.OwnerName,team?b?.Contact:null,team?p.OwnerEmail:null,Entry(b),rev?.State??"pending",f?.Development,f?.Mode,f?.Start,f?.End,team?f?.Assumptions:null,final?Hours.Values(f!.Today):null,final?Hours.Values(f!.After):null,final?Hours.Gains(f!):null,p.SavedHoursPerMonth,DevelopmentRequests.Effort(p),team?rev?.Actor:null,rev?.At));
   }
@@ -83,7 +89,7 @@ public static partial class ReviewApi {
   var viewer=team?Staff(c):Viewer(c,dp);if(viewer==null)return Results.Unauthorized();
   var r=await db.Requests.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id);if(r==null||!Eligible(r))return Results.NotFound();
   var p=Input(r);var b=await db.Bindings.AsNoTracking().SingleOrDefaultAsync(x=>x.RequestId==id);
-  if(!team&&!Allowed(viewer,b?.Contact,await Areas(db,viewer),p.Area))return Results.NotFound();
+  if(!team&&!Allowed(viewer,Owner(b,p),await Areas(db,viewer),p.Area))return Results.NotFound();
   var rec=await db.Reviews.SingleOrDefaultAsync(x=>x.RequestId==id);
   if(save!=null){
    if(rec?.Version!=save.Version||rec?.State=="submitted"&&!save.Submit)return Results.Conflict(new{error="A revisão já foi actualizada. Reabre o pedido antes de guardar."});

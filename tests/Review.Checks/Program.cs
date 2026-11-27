@@ -54,7 +54,9 @@ try {
  var r1=await tt.Post("/review-team/reminders",null);Assert((int?)r1["sent"]==2&&!mail.Sent.TakeLast(2).Any(x=>x.Recipient==a),"pending reminders only");
  var r2=await tt.Post("/review-team/reminders",null);Assert((int?)r2["sent"]==0&&(int?)r2["skipped"]==2,"one reminder per day");
  await tt.Call("/review-team/delegates","DELETE",new{email=d,area="DFC"});await director.Get("/review/requests/"+one,404);
- await tt.Call("/review-team/requests/"+one+"/assignment","PUT",new{contact=(string?)null,catalogueKey="13"});await ana.Get("/review/requests/"+one,404);
+ await tt.Call("/review-team/requests/"+one+"/assignment","PUT",new{contact="outra@example.invalid",catalogueKey="13"});await ana.Get("/review/requests/"+one,404);
+ // Without an assignment, the email of the original submission has access.
+ await tt.Call("/review-team/requests/"+one+"/assignment","PUT",new{contact=(string?)null,catalogueKey="13"});await ana.Get("/review/requests/"+one);
  await ana.Post("/review/logout",null);await ana.Get("/review/requests",401);
  using(var scope=app.Services.CreateScope()){var db=scope.ServiceProvider.GetRequiredService<RequestsDb>();Assert(await db.ReviewEvents.CountAsync(x=>x.RequestId==one&&(x.Action=="draft"||x.Action=="submitted"))==2,"audit");await db.ReviewSchema();await ReviewApi.AutoBind(db);Assert(await db.Reviews.CountAsync()==1,"upgrade idempotent");}
  Console.WriteLine("PASS: real ASP.NET middleware/SQLite; OTP, replay, cooldown, access and revocation, draft, conflicts, audit, original, gain, priority, reminders.");
